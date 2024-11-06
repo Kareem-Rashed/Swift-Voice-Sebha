@@ -16,8 +16,18 @@ Features
 	•	Customizable Settings: Customize the number of beads or recitations per session.
 
 Screenshots
+# Voice-Activated Sebha App
 
-(You can add your app screenshots here to demonstrate the app’s user interface and features.)
+## Screenshots
+
+<p align="center">
+  <img src="SS%201.png" width="200" />
+  <img src="SS%202.png" width="200" />
+  <img src="SS%203.png" width="200" />
+  <img src="SS%204.png" width="200" />
+</p>
+
+
 
 Technologies Used
 

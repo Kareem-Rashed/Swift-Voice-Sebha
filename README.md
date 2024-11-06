@@ -66,11 +66,12 @@ Future Improvements
 
 Contributing
 
-If you’d like to contribute to the development of this project, feel free to fork the repository and create pull requests. Please ensure that any changes or improvements are well-documented.
+If you’d like to contribute to the development of this project, feel free to email me.
 
 Contact
 
 	•	Email: Kareemrashed2018@gmail.com
+ 	•	Email: Kareemrashed@aucegypt.edu
 	•	GitHub: Kareem-Rashed
 	•	Instagram: @kareem.m.rashed
 

@@ -52,14 +52,8 @@ class SebhaViewModel: ObservableObject {
     @Published var recognizedText = ""
     @Published var currentSebhaProgress: Double = 0.0
     
-    // Voice recordings for each sebha
-    @Published var sebhaRecordings: [String: URL] = [:]
-    @Published var isRecordingVoicePrompt = false
-    @Published var recordingForSebhaIndex: Int? = nil
-    
-    // Sound player for completion sound and voice prompts
+    // Sound player for completion sound
     private var audioPlayer: AVAudioPlayer?
-    private var voiceRecorder: AVAudioRecorder?
     
     let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "ar-SA"))!
     var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -82,18 +76,10 @@ class SebhaViewModel: ObservableObject {
         currentIndex = 0
         updateProgress()
         print("Initialization done")
-        setupAudioSession()
-        loadVoiceRecordings()
     }
     
-    private func setupAudioSession() {
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
-            try audioSession.setActive(true)
-        } catch {
-            print("Failed to setup audio session: \(error)")
-        }
+    private func updateProgress() {
+        currentSebhaProgress = currentTarget > 0 ? Double(counter) / Double(currentTarget) : 0.0
     }
     
     func startSpeechRecognitionForNewSebha() {
@@ -122,7 +108,6 @@ class SebhaViewModel: ObservableObject {
             }
         }
         
-        // Use the input node's actual format
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, when in
             self.recognitionRequest?.append(buffer)
@@ -139,6 +124,7 @@ class SebhaViewModel: ObservableObject {
             print("Audio engine couldn't start because of an error: \(error.localizedDescription)")
         }
     }
+    
     func stopSpeechRecognitionForNewSebha() {
         if audioEngine.isRunning {
             audioEngine.inputNode.removeTap(onBus: 0)
@@ -191,6 +177,7 @@ class SebhaViewModel: ObservableObject {
         if counter >= currentTarget && currentTarget > 0 {
             triggerVibration()
             playCompletionSound()
+            showAlert = true
             delegate?.didReachTarget()
             
             // Auto switch to next sebha after a brief delay
@@ -199,10 +186,6 @@ class SebhaViewModel: ObservableObject {
             }
         }
         saveSebhas()
-    }
-    
-    private func updateProgress() {
-        currentSebhaProgress = currentTarget > 0 ? Double(counter) / Double(currentTarget) : 0.0
     }
     
     func addFavoriteSebha(at index: Int) {
@@ -335,6 +318,7 @@ class SebhaViewModel: ObservableObject {
         updateProgress()
         saveSebhas()
     }
+    
     private var isRestarting = false // Added flag to prevent multiple restarts
     private func handleSpokenText(_ text: String) {
         let sebhaPhrase = selectedSebha.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -397,15 +381,8 @@ class SebhaViewModel: ObservableObject {
         }
     }
 
-
-        
     func startSpeechRecognition() {
         before = 0 // Reset the count before starting recognition
-        
-        // Stop any existing recognition
-        if audioEngine.isRunning {
-            stopSpeechRecognition()
-        }
         
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         
@@ -429,7 +406,6 @@ class SebhaViewModel: ObservableObject {
             }
         }
         
-        // Use the input node's actual format
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, when in
             self.recognitionRequest?.append(buffer)
@@ -439,9 +415,8 @@ class SebhaViewModel: ObservableObject {
         
         do {
             try audioEngine.start()
-            print("Speech recognition started successfully")
         } catch {
-            print("audioEngine couldn't start because of an error: \(error.localizedDescription)")
+            print("audioEngine couldn't start because of an error.")
         }
     }
 
@@ -510,11 +485,6 @@ class SebhaViewModel: ObservableObject {
         updateProgress()
         
         print("Switched to next sebha: \(selectedSebha)")
-        
-        // Play voice prompt for the new sebha instead of showing alert
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.playVoicePrompt(for: self.selectedSebha)
-        }
     }
     
     func selectSebha(at index: Int) {
@@ -526,106 +496,5 @@ class SebhaViewModel: ObservableObject {
         counter = 0
         updateProgress()
         saveSebhas()
-    }
-    
-    // MARK: - Voice Recording Functions
-    private func getDocumentsDirectory() -> URL {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        return paths[0]
-    }
-    
-    private func getVoiceRecordingURL(for sebha: String) -> URL {
-        let filename = sebha.replacingOccurrences(of: " ", with: "_") + "_voice.m4a"
-        return getDocumentsDirectory().appendingPathComponent(filename)
-    }
-    
-    func startRecordingVoicePrompt(for index: Int) {
-        guard index < allSebhas.count else { return }
-        
-        recordingForSebhaIndex = index
-        let sebha = allSebhas[index]
-        let recordingURL = getVoiceRecordingURL(for: sebha)
-        
-        let settings = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 12000,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-        
-        do {
-            voiceRecorder = try AVAudioRecorder(url: recordingURL, settings: settings)
-            voiceRecorder?.record()
-            isRecordingVoicePrompt = true
-            print("Started recording voice prompt for: \(sebha)")
-        } catch {
-            print("Could not start recording voice prompt: \(error)")
-        }
-    }
-    
-    func stopRecordingVoicePrompt() {
-        guard let recorder = voiceRecorder, let index = recordingForSebhaIndex else { return }
-        
-        recorder.stop()
-        isRecordingVoicePrompt = false
-        
-        let sebha = allSebhas[index]
-        let recordingURL = getVoiceRecordingURL(for: sebha)
-        sebhaRecordings[sebha] = recordingURL
-        
-        saveVoiceRecordings()
-        print("Stopped recording voice prompt for: \(sebha)")
-        
-        voiceRecorder = nil
-        recordingForSebhaIndex = nil
-    }
-    
-    func playVoicePrompt(for sebha: String) {
-        guard let recordingURL = sebhaRecordings[sebha] else {
-            print("No voice recording found for: \(sebha)")
-            return
-        }
-        
-        do {
-            audioPlayer = try AVAudioPlayer(contentsOf: recordingURL)
-            audioPlayer?.play()
-            print("Playing voice prompt for: \(sebha)")
-        } catch {
-            print("Could not play voice prompt: \(error)")
-        }
-    }
-    
-    func hasVoiceRecording(for sebha: String) -> Bool {
-        guard let url = sebhaRecordings[sebha] else { return false }
-        return FileManager.default.fileExists(atPath: url.path)
-    }
-    
-    func deleteVoiceRecording(for sebha: String) {
-        guard let recordingURL = sebhaRecordings[sebha] else { return }
-        
-        do {
-            try FileManager.default.removeItem(at: recordingURL)
-            sebhaRecordings.removeValue(forKey: sebha)
-            saveVoiceRecordings()
-            print("Deleted voice recording for: \(sebha)")
-        } catch {
-            print("Could not delete voice recording: \(error)")
-        }
-    }
-    
-    private func saveVoiceRecordings() {
-        let recordings = sebhaRecordings.mapValues { $0.path }
-        UserDefaults.standard.set(recordings, forKey: "sebhaVoiceRecordings")
-    }
-    
-    private func loadVoiceRecordings() {
-        guard let savedRecordings = UserDefaults.standard.dictionary(forKey: "sebhaVoiceRecordings") as? [String: String] else { return }
-        
-        sebhaRecordings = savedRecordings.compactMapValues { path in
-            let url = URL(fileURLWithPath: path)
-            return FileManager.default.fileExists(atPath: path) ? url : nil
-        }
-        
-        print("Loaded voice recordings: \(sebhaRecordings.keys)")
     }
 }
